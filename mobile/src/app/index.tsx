@@ -1,98 +1,94 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+import { colors, typography, spacing, borderRadius, shadow } from '@/theme';
 
 export default function HomeScreen() {
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.h1}>HOT COLLECTION</Text>
+        <Text style={styles.h2}>Design System — teste visual</Text>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+        <View style={[styles.card, shadow.card]}>
+          <Text style={styles.h3}>Sua garagem</Text>
+          <Text style={styles.body}>
+            Esta é uma prévia das cores, fontes e espaçamentos definidos para o app.
+          </Text>
+        </View>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        <View style={styles.badgeRow}>
+          <View style={[styles.badge, { backgroundColor: colors.flame[600] }]}>
+            <Text style={styles.badgeText}>RARO</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: colors.chrome[500] }]}>
+            <Text style={styles.badgeText}>NOVO</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: colors.feedback.success }]}>
+            <Text style={styles.badgeText}>OK</Text>
+          </View>
+        </View>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        <Text style={styles.caption}>Fonte de título: Barlow Condensed</Text>
+        <Text style={styles.bodyMedium}>Fonte de corpo: Inter Medium</Text>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
   safeArea: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    backgroundColor: colors.background[900],
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  container: {
+    padding: spacing.lg,
+    gap: spacing.md,
   },
-  title: {
-    textAlign: 'center',
+  h1: {
+    ...typography.h1,
+    color: colors.flame[600],
   },
-  code: {
-    textTransform: 'uppercase',
+  h2: {
+    ...typography.h3,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  h3: {
+    ...typography.h3,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  body: {
+    ...typography.body,
+    color: colors.text.secondary,
+  },
+  bodyMedium: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+  },
+  caption: {
+    ...typography.caption,
+    color: colors.text.disabled,
+  },
+  card: {
+    backgroundColor: colors.background[700],
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.background[500],
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  badge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.pill,
+  },
+  badgeText: {
+    ...typography.label,
+    color: colors.text.primary,
   },
 });
