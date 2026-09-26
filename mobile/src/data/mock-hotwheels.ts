@@ -36,4 +36,4 @@ export const mockGarage: HotWheelItem[] = [
     year: 2023,
     favorite: true,
   },
-];
+];  
