@@ -25,3 +25,23 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model HotWheel {
+  id                String   @id @default(uuid())
+  code              String   @unique
+  toyNumber         String?
+  name              String
+  model             String?
+  manufacturer      String   @default("Mattel")
+  year              Int?
+  series            String?
+  collection        String?
+  collectionNumber  String?
+  seriesNumber      String?
+  imageUrl          String?
+  packagingImageUrl String?
+  description       String?
+  variation         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
