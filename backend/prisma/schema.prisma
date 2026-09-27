@@ -17,22 +17,23 @@ model HealthCheck {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String?
-  name      String?
-  googleId  String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String       @id @default(uuid())
+  email       String       @unique
+  password    String?
+  name        String?
+  googleId    String?      @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  garageItems GarageItem[]
 }
 
 model HotWheel {
-  id                String   @id @default(uuid())
-  code              String   @unique
+  id                String       @id @default(uuid())
+  code              String       @unique
   toyNumber         String?
   name              String
   model             String?
-  manufacturer      String   @default("Mattel")
+  manufacturer      String       @default("Mattel")
   year              Int?
   series            String?
   collection        String?
@@ -42,6 +43,22 @@ model HotWheel {
   packagingImageUrl String?
   description       String?
   variation         String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  garageItems       GarageItem[]
+}
+
+model GarageItem {
+  id         String   @id @default(uuid())
+  userId     String
+  hotWheelId String
+  quantity   Int      @default(1)
+  favorite   Boolean  @default(false)
+  notes      String?
+  addedAt    DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotWheel HotWheel @relation(fields: [hotWheelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hotWheelId])
 }
