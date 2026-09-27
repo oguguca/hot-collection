@@ -19,8 +19,9 @@ model HealthCheck {
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
-  password  String
+  password  String?
   name      String?
+  googleId  String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -22,5 +23,18 @@ export class AuthController {
   @Get('me')
   getProfile(@Req() req: any) {
     return req.user;
+  }
+
+  @UseGuards(GoogleAuthGuard)
+  @Get('google')
+  googleAuth() {
+    // Este método fica vazio de propósito.
+    // O Guard intercepta a requisição e redireciona para a tela de login do Google.
+  }
+
+  @UseGuards(GoogleAuthGuard)
+  @Get('google/callback')
+  googleAuthCallback(@Req() req: any) {
+    return this.authService.validateGoogleUser(req.user);
   }
 }

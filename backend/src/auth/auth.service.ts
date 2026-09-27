@@ -39,7 +39,7 @@ export class AuthService {
       where: { email: dto.email },
     });
 
-    if (!user) {
+    if (!user || !user.password) {
       throw new UnauthorizedException('E-mail ou senha inválidos.');
     }
 
@@ -47,6 +47,29 @@ export class AuthService {
 
     if (!passwordMatches) {
       throw new UnauthorizedException('E-mail ou senha inválidos.');
+    }
+
+    return this.buildAuthResponse(user.id, user.email, user.name);
+  }
+
+  async validateGoogleUser(googleUser: { googleId: string; email: string; name: string }) {
+    let user = await this.prisma.user.findUnique({
+      where: { email: googleUser.email },
+    });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email: googleUser.email,
+          name: googleUser.name,
+          googleId: googleUser.googleId,
+        },
+      });
+    } else if (!user.googleId) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { googleId: googleUser.googleId },
+      });
     }
 
     return this.buildAuthResponse(user.id, user.email, user.name);
