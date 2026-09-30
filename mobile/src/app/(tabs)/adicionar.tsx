@@ -13,31 +13,57 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors, typography, spacing, borderRadius, shadow } from '@/theme';
-import { mockGarage } from '@/data/mock-hotwheels';
+import { api } from '@/services/api';
 
 type SearchState = 'idle' | 'loading' | 'found' | 'not-found';
+
+type HotWheelResult = {
+  id: string;
+  code: string;
+  name: string;
+  series: string | null;
+  collectionNumber: string | null;
+};
 
 export default function AdicionarScreen() {
   const [code, setCode] = useState('');
   const [state, setState] = useState<SearchState>('idle');
+  const [result, setResult] = useState<HotWheelResult | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
 
-  function handleSearch() {
+  async function handleSearch() {
     if (!code.trim()) return;
 
     setState('loading');
+    setAdded(false);
 
-    // Simulação — na Fase 9 isso vira uma chamada real à API
-    setTimeout(() => {
-      const normalized = code.trim().toUpperCase();
-      if (normalized === 'HYY04-N7C6') {
+    try {
+      const response = await api.get(`/hot-wheels/code/${code.trim()}`);
+      if (response.data.found) {
+        setResult(response.data.data);
         setState('found');
       } else {
         setState('not-found');
       }
-    }, 1000);
+    } catch (error) {
+      setState('not-found');
+    }
   }
 
-  const result = mockGarage[0]; // usado só quando state === 'found'
+  async function handleAddToGarage() {
+    if (!result) return;
+
+    setAdding(true);
+    try {
+      await api.post('/my-garage', { hotWheelCode: result.code });
+      setAdded(true);
+    } catch (error) {
+      // erro silencioso por enquanto — poderíamos mostrar um toast aqui futuramente
+    } finally {
+      setAdding(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -79,7 +105,7 @@ export default function AdicionarScreen() {
             </View>
           )}
 
-          {state === 'found' && (
+          {state === 'found' && result && (
             <View style={[styles.resultCard, shadow.card]}>
               <View style={styles.imagePlaceholder}>
                 <Ionicons name="car-sport" size={32} color={colors.chrome[500]} />
@@ -88,13 +114,30 @@ export default function AdicionarScreen() {
                 <Text style={styles.resultName}>{result.name}</Text>
                 <Text style={styles.resultCode}>{result.code}</Text>
                 <Text style={styles.resultSeries}>
-                  {result.series} · {result.collectionNumber}
+                  {result.series ?? '—'} · {result.collectionNumber ?? '—'}
                 </Text>
               </View>
-              <Pressable style={styles.addButton}>
-                <Ionicons name="add" size={18} color={colors.text.primary} />
-                <Text style={styles.addButtonText}>Adicionar à garagem</Text>
-              </Pressable>
+
+              {added ? (
+                <View style={styles.addedRow}>
+                  <Ionicons name="checkmark-circle" size={18} color={colors.feedback.success} />
+                  <Text style={styles.addedText}>Adicionado à garagem!</Text>
+                </View>
+              ) : (
+                <Pressable
+                  style={styles.addButton}
+                  onPress={handleAddToGarage}
+                  disabled={adding}>
+                  {adding ? (
+                    <ActivityIndicator color={colors.text.primary} />
+                  ) : (
+                    <>
+                      <Ionicons name="add" size={18} color={colors.text.primary} />
+                      <Text style={styles.addButtonText}>Adicionar à garagem</Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
             </View>
           )}
         </View>
@@ -181,5 +224,16 @@ const styles = StyleSheet.create({
   addButtonText: {
     ...typography.bodyMedium,
     color: colors.text.primary,
+  },
+  addedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  addedText: {
+    ...typography.bodyMedium,
+    color: colors.feedback.success,
   },
 });
