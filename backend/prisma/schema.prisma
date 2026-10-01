@@ -43,6 +43,8 @@ model HotWheel {
   packagingImageUrl String?
   description       String?
   variation         String?
+  source            String?
+  sourceUrl         String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   garageItems       GarageItem[]
