@@ -13,6 +13,7 @@ type AuthContextType = {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
+  loginWithGoogleData: (data: { accessToken: string; id: string; email: string; name: string }) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -52,13 +53,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.data.user);
   }
 
+  async function loginWithGoogleData(data: {
+    accessToken: string;
+    id: string;
+    email: string;
+    name: string;
+  }) {
+    await SecureStore.setItemAsync('accessToken', data.accessToken);
+    setUser({ id: data.id, email: data.email, name: data.name || null });
+  }
+
   async function logout() {
     await SecureStore.deleteItemAsync('accessToken');
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, login, register, loginWithGoogleData, logout }}>
       {children}
     </AuthContext.Provider>
   );

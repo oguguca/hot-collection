@@ -1,4 +1,5 @@
-import { Controller, Post, Body, UseGuards, Get, Req } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -34,7 +35,24 @@ export class AuthController {
 
   @UseGuards(GoogleAuthGuard)
   @Get('google/callback')
-  googleAuthCallback(@Req() req: any) {
-    return this.authService.validateGoogleUser(req.user);
+  async googleAuthCallback(@Req() req: any, @Res() res: Response) {
+    const result = await this.authService.validateGoogleUser(req.user);
+
+    const redirectUrl = `hotcollectionapp://auth-callback?accessToken=${encodeURIComponent(
+      result.accessToken,
+    )}&userId=${encodeURIComponent(result.user.id)}&email=${encodeURIComponent(
+      result.user.email,
+    )}&name=${encodeURIComponent(result.user.name ?? '')}`;
+
+    res.send(`
+      <html>
+        <body style="background:#0A0A0B; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
+          <script>
+            window.location.href = "${redirectUrl}";
+          </script>
+          <p style="color:#F5F5F7; font-family:sans-serif;">Redirecionando...</p>
+        </body>
+      </html>
+    `);
   }
 }

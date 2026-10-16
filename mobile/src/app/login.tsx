@@ -11,15 +11,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import { Ionicons } from '@expo/vector-icons';
 
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { useAuth } from '@/contexts/auth-context';
 
+const API_BASE_URL = 'http://10.0.2.2:3000';
+
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, loginWithGoogleData } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
   async function handleLogin() {
@@ -32,6 +37,36 @@ export default function LoginScreen() {
       setError(err?.response?.data?.message ?? 'Não foi possível fazer login.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGoogleLogin() {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      const authUrl = `${API_BASE_URL}/auth/google`;
+      const redirectUrl = 'hotcollectionapp://auth-callback';
+
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+
+      if (result.type === 'success' && result.url) {
+        const params = new URL(result.url).searchParams;
+        const accessToken = params.get('accessToken');
+        const id = params.get('userId');
+        const userEmail = params.get('email');
+        const name = params.get('name');
+
+        if (accessToken && id && userEmail) {
+          await loginWithGoogleData({ accessToken, id, email: userEmail, name: name ?? '' });
+          router.replace('/');
+        } else {
+          setError('Não foi possível completar o login com Google.');
+        }
+      }
+    } catch (err) {
+      setError('Não foi possível completar o login com Google.');
+    } finally {
+      setGoogleLoading(false);
     }
   }
 
@@ -70,6 +105,26 @@ export default function LoginScreen() {
               <ActivityIndicator color={colors.text.primary} />
             ) : (
               <Text style={styles.buttonText}>Entrar</Text>
+            )}
+          </Pressable>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>ou</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <Pressable
+            style={styles.googleButton}
+            onPress={handleGoogleLogin}
+            disabled={googleLoading}>
+            {googleLoading ? (
+              <ActivityIndicator color={colors.text.primary} />
+            ) : (
+              <>
+                <Ionicons name="logo-google" size={18} color={colors.text.primary} />
+                <Text style={styles.googleButtonText}>Entrar com Google</Text>
+              </>
             )}
           </Pressable>
 
@@ -116,6 +171,36 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   buttonText: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginVertical: spacing.xs,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.background[500],
+  },
+  dividerText: {
+    ...typography.caption,
+    color: colors.text.disabled,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.background[700],
+    borderWidth: 1,
+    borderColor: colors.background[500],
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+  },
+  googleButtonText: {
     ...typography.bodyMedium,
     color: colors.text.primary,
   },
