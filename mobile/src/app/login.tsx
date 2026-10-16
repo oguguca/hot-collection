@@ -1,4 +1,5 @@
 import { useState } from 'react';
+   import * as Linking from 'expo-linking';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -40,24 +41,34 @@ export default function LoginScreen() {
     }
   }
 
-  async function handleGoogleLogin() {
+    async function handleGoogleLogin() {
     setError('');
     setGoogleLoading(true);
     try {
-      const authUrl = `${API_BASE_URL}/auth/google`;
-      const redirectUrl = 'hotcollectionapp://auth-callback';
+      // No Expo Go gera um endereço exp://..., num build nativo gera hotcollectionapp://...
+      const redirectUrl = Linking.createURL('auth-callback');
+      const authUrl = `${API_BASE_URL}/auth/google?redirect=${encodeURIComponent(redirectUrl)}`;
 
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
 
       if (result.type === 'success' && result.url) {
-        const params = new URL(result.url).searchParams;
-        const accessToken = params.get('accessToken');
-        const id = params.get('userId');
-        const userEmail = params.get('email');
-        const name = params.get('name');
+        const { queryParams } = Linking.parse(result.url);
+        const accessToken = queryParams?.accessToken;
+        const id = queryParams?.userId;
+        const userEmail = queryParams?.email;
+        const name = queryParams?.name;
 
-        if (accessToken && id && userEmail) {
-          await loginWithGoogleData({ accessToken, id, email: userEmail, name: name ?? '' });
+        if (
+          typeof accessToken === 'string' &&
+          typeof id === 'string' &&
+          typeof userEmail === 'string'
+        ) {
+          await loginWithGoogleData({
+            accessToken,
+            id,
+            email: userEmail,
+            name: typeof name === 'string' ? name : '',
+          });
           router.replace('/');
         } else {
           setError('Não foi possível completar o login com Google.');
@@ -69,7 +80,7 @@ export default function LoginScreen() {
       setGoogleLoading(false);
     }
   }
-
+  
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView

@@ -32,7 +32,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = await SecureStore.getItemAsync('accessToken');
       if (token) {
         const response = await api.get('/auth/me');
-        setUser({ id: response.data.userId, email: response.data.email, name: null });
+        setUser({
+  id: response.data.userId,
+  email: response.data.email,
+  name: response.data.name ?? null,
+});
       }
     } catch {
       await SecureStore.deleteItemAsync('accessToken');

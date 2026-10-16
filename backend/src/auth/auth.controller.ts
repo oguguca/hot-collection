@@ -20,17 +20,16 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard)
   @Get('me')
   getProfile(@Req() req: any) {
-    return req.user;
+    return this.authService.getProfile(req.user.userId);
   }
 
   @UseGuards(GoogleAuthGuard)
   @Get('google')
   googleAuth() {
-    // Este método fica vazio de propósito.
-    // O Guard intercepta a requisição e redireciona para a tela de login do Google.
+    // Fica vazio de propósito: o Guard redireciona para a tela de login do Google.
   }
 
   @UseGuards(GoogleAuthGuard)
@@ -38,19 +37,27 @@ export class AuthController {
   async googleAuthCallback(@Req() req: any, @Res() res: Response) {
     const result = await this.authService.validateGoogleUser(req.user);
 
-    const redirectUrl = `hotcollectionapp://auth-callback?accessToken=${encodeURIComponent(
-      result.accessToken,
-    )}&userId=${encodeURIComponent(result.user.id)}&email=${encodeURIComponent(
-      result.user.email,
-    )}&name=${encodeURIComponent(result.user.name ?? '')}`;
+    // Só aceitamos endereços de retorno de apps (evita redirecionar para sites de terceiros)
+    const state = typeof req.query.state === 'string' ? req.query.state : '';
+    const allowed = /^(exp|exps|hotcollectionapp):\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]*$/;
+    const baseUrl = allowed.test(state) ? state : 'hotcollectionapp://auth-callback';
+    const separator = baseUrl.includes('?') ? '&' : '?';
+
+    const redirectUrl =
+      `${baseUrl}${separator}accessToken=${encodeURIComponent(result.accessToken)}` +
+      `&userId=${encodeURIComponent(result.user.id)}` +
+      `&email=${encodeURIComponent(result.user.email)}` +
+      `&name=${encodeURIComponent(result.user.name ?? '')}`;
 
     res.send(`
       <html>
-        <body style="background:#0A0A0B; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
-          <script>
-            window.location.href = "${redirectUrl}";
-          </script>
-          <p style="color:#F5F5F7; font-family:sans-serif;">Redirecionando...</p>
+        <body style="background:#0A0A0B; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0; font-family:sans-serif;">
+          <p style="color:#F5F5F7;">Login concluído!</p>
+          <a href="${redirectUrl.replace(/&/g, '&amp;')}"
+             style="background:#F03A26; color:#F5F5F7; padding:12px 24px; border-radius:12px; text-decoration:none;">
+            Voltar para o app
+          </a>
+          <script>window.location.href = ${JSON.stringify(redirectUrl)};</script>
         </body>
       </html>
     `);
