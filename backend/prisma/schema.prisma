@@ -10,6 +10,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  EXPIRED
+  PAST_DUE
+}
+
 model HealthCheck {
   id        Int      @id @default(autoincrement())
   status    String
@@ -17,14 +24,15 @@ model HealthCheck {
 }
 
 model User {
-  id          String       @id @default(uuid())
-  email       String       @unique
-  password    String?
-  name        String?
-  googleId    String?      @unique
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  garageItems GarageItem[]
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String?
+  name          String?
+  googleId      String?        @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  garageItems   GarageItem[]
+  subscriptions Subscription[]
 }
 
 model HotWheel {
@@ -63,4 +71,36 @@ model GarageItem {
   hotWheel HotWheel @relation(fields: [hotWheelId], references: [id], onDelete: Cascade)
 
   @@unique([userId, hotWheelId])
+}
+
+model SubscriptionPlan {
+  id            String         @id @default(uuid())
+  code          String         @unique
+  name          String
+  description   String?
+  price         Decimal        @db.Decimal(10, 2)
+  currency      String         @default("BRL")
+  features      Json
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                     String             @id @default(uuid())
+  userId                 String
+  planId                 String
+  status                 SubscriptionStatus @default(ACTIVE)
+  provider               String?
+  providerSubscriptionId String?
+  startedAt              DateTime           @default(now())
+  expiresAt              DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId, status])
 }
