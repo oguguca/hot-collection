@@ -12,17 +12,26 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async getProfile(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, name: true },
+  async register(dto: RegisterDto) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
     });
 
-    if (!user) {
-      throw new UnauthorizedException('Usuário não encontrado.');
+    if (existingUser) {
+      throw new ConflictException('Este e-mail já está cadastrado.');
     }
 
-    return { userId: user.id, email: user.email, name: user.name };
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        password: hashedPassword,
+        name: dto.name,
+      },
+    });
+
+    return this.buildAuthResponse(user.id, user.email, user.name);
   }
 
   async login(dto: LoginDto) {
@@ -64,6 +73,19 @@ export class AuthService {
     }
 
     return this.buildAuthResponse(user.id, user.email, user.name);
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Usuário não encontrado.');
+    }
+
+    return { userId: user.id, email: user.email, name: user.name };
   }
 
   private buildAuthResponse(userId: string, email: string, name: string | null) {
