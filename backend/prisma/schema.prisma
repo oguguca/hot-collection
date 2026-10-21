@@ -43,7 +43,10 @@ model HotWheel {
   model             String?
   manufacturer      String       @default("Mattel")
   year              Int?
+  line              String?
   series            String?
+  theme             String?
+  bodyColor         String?
   collection        String?
   collectionNumber  String?
   seriesNumber      String?
