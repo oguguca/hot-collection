@@ -6,18 +6,13 @@ import { useFocusEffect } from 'expo-router';
 import { colors, typography, spacing } from '@/theme';
 import { api } from '@/services/api';
 import { HotWheelCard } from '@/components/hot-wheel-card';
+import type { HotWheel } from '@/types/hot-wheel';
 
 type GarageItem = {
   id: string;
   quantity: number;
   favorite: boolean;
-  hotWheel: {
-    code: string;
-    name: string;
-    series: string | null;
-    collectionNumber: string | null;
-    year: number | null;
-  };
+  hotWheel: HotWheel;
 };
 
 export default function GaragemScreen() {
@@ -27,10 +22,10 @@ export default function GaragemScreen() {
 
   async function loadGarage() {
     try {
-      const response = await api.get('/my-garage');
+      const response = await api.get<GarageItem[]>('/my-garage');
       setItems(response.data);
-    } catch (error) {
-      // por enquanto, silencioso — poderíamos mostrar um erro visual
+    } catch {
+      // por enquanto, silencioso
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -58,6 +53,8 @@ export default function GaragemScreen() {
     );
   }
 
+  const totalUnits = items.reduce((sum, item) => sum + item.quantity, 0);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlatList
@@ -75,7 +72,8 @@ export default function GaragemScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>Sua garagem</Text>
             <Text style={styles.subtitle}>
-              {items.length} {items.length === 1 ? 'modelo' : 'modelos'} na coleção
+              {items.length} {items.length === 1 ? 'modelo' : 'modelos'} · {totalUnits}{' '}
+              {totalUnits === 1 ? 'unidade' : 'unidades'}
             </Text>
           </View>
         }
@@ -88,15 +86,9 @@ export default function GaragemScreen() {
         }
         renderItem={({ item }) => (
           <HotWheelCard
-            item={{
-              id: item.id,
-              code: item.hotWheel.code,
-              name: item.hotWheel.name,
-              series: item.hotWheel.series ?? '',
-              collectionNumber: item.hotWheel.collectionNumber ?? '',
-              year: item.hotWheel.year ?? 0,
-              favorite: item.favorite,
-            }}
+            hotWheel={item.hotWheel}
+            favorite={item.favorite}
+            quantity={item.quantity}
           />
         )}
       />

@@ -12,41 +12,37 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors, typography, spacing, borderRadius, shadow } from '@/theme';
+import { colors, typography, spacing, borderRadius } from '@/theme';
 import { api } from '@/services/api';
+import { HotWheelCard } from '@/components/hot-wheel-card';
+import type { HotWheel } from '@/types/hot-wheel';
 
 type SearchState = 'idle' | 'loading' | 'found' | 'not-found';
-
-type HotWheelResult = {
-  id: string;
-  code: string;
-  name: string;
-  series: string | null;
-  collectionNumber: string | null;
-};
 
 export default function AdicionarScreen() {
   const [code, setCode] = useState('');
   const [state, setState] = useState<SearchState>('idle');
-  const [result, setResult] = useState<HotWheelResult | null>(null);
+  const [result, setResult] = useState<HotWheel | null>(null);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
+  const [addError, setAddError] = useState('');
 
   async function handleSearch() {
     if (!code.trim()) return;
 
     setState('loading');
     setAdded(false);
+    setAddError('');
 
     try {
-      const response = await api.get(`/hot-wheels/code/${code.trim()}`);
+      const response = await api.get(`/hot-wheels/code/${encodeURIComponent(code.trim())}`);
       if (response.data.found) {
         setResult(response.data.data);
         setState('found');
       } else {
         setState('not-found');
       }
-    } catch (error) {
+    } catch {
       setState('not-found');
     }
   }
@@ -55,11 +51,12 @@ export default function AdicionarScreen() {
     if (!result) return;
 
     setAdding(true);
+    setAddError('');
     try {
       await api.post('/my-garage', { hotWheelCode: result.code });
       setAdded(true);
-    } catch (error) {
-      // erro silencioso por enquanto — poderíamos mostrar um toast aqui futuramente
+    } catch {
+      setAddError('Não foi possível adicionar. Tente de novo.');
     } finally {
       setAdding(false);
     }
@@ -77,12 +74,13 @@ export default function AdicionarScreen() {
           <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
-              placeholder="Ex: HYY04-N7C6"
+              placeholder="Ex: HKC37"
               placeholderTextColor={colors.text.disabled}
               value={code}
               onChangeText={setCode}
               autoCapitalize="characters"
               autoCorrect={false}
+              onSubmitEditing={handleSearch}
             />
             <Pressable style={styles.searchButton} onPress={handleSearch}>
               <Ionicons name="search" size={20} color={colors.text.primary} />
@@ -106,17 +104,8 @@ export default function AdicionarScreen() {
           )}
 
           {state === 'found' && result && (
-            <View style={[styles.resultCard, shadow.card]}>
-              <View style={styles.imagePlaceholder}>
-                <Ionicons name="car-sport" size={32} color={colors.chrome[500]} />
-              </View>
-              <View style={styles.resultInfo}>
-                <Text style={styles.resultName}>{result.name}</Text>
-                <Text style={styles.resultCode}>{result.code}</Text>
-                <Text style={styles.resultSeries}>
-                  {result.series ?? '—'} · {result.collectionNumber ?? '—'}
-                </Text>
-              </View>
+            <View style={styles.resultBlock}>
+              <HotWheelCard hotWheel={result} />
 
               {added ? (
                 <View style={styles.addedRow}>
@@ -124,10 +113,7 @@ export default function AdicionarScreen() {
                   <Text style={styles.addedText}>Adicionado à garagem!</Text>
                 </View>
               ) : (
-                <Pressable
-                  style={styles.addButton}
-                  onPress={handleAddToGarage}
-                  disabled={adding}>
+                <Pressable style={styles.addButton} onPress={handleAddToGarage} disabled={adding}>
                   {adding ? (
                     <ActivityIndicator color={colors.text.primary} />
                   ) : (
@@ -138,6 +124,8 @@ export default function AdicionarScreen() {
                   )}
                 </Pressable>
               )}
+
+              {addError !== '' && <Text style={styles.error}>{addError}</Text>}
             </View>
           )}
         </View>
@@ -190,27 +178,10 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     flex: 1,
   },
-  resultCard: {
+  resultBlock: {
     marginTop: spacing.lg,
-    backgroundColor: colors.background[700],
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.background[500],
-    padding: spacing.md,
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
-  imagePlaceholder: {
-    width: 72,
-    height: 72,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.background[600],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resultInfo: { gap: 2 },
-  resultName: { ...typography.bodyMedium, color: colors.text.primary },
-  resultCode: { ...typography.caption, color: colors.text.disabled },
-  resultSeries: { ...typography.caption, color: colors.text.secondary },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -219,7 +190,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.flame[600],
     borderRadius: borderRadius.md,
     paddingVertical: spacing.sm,
-    marginTop: spacing.xs,
   },
   addButtonText: {
     ...typography.bodyMedium,
@@ -230,10 +200,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    marginTop: spacing.xs,
+    paddingVertical: spacing.sm,
   },
   addedText: {
     ...typography.bodyMedium,
     color: colors.feedback.success,
+  },
+  error: {
+    ...typography.caption,
+    color: colors.feedback.danger,
+    textAlign: 'center',
   },
 });
