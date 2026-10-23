@@ -1,8 +1,8 @@
-import { IsString, IsOptional, IsInt, IsBoolean, Min } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsBoolean, IsUUID, Min } from 'class-validator';
 
 export class AddToGarageDto {
-  @IsString()
-  hotWheelCode: string;
+  @IsUUID()
+  hotWheelId: string;
 
   @IsOptional()
   @IsInt()

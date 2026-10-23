@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateHotWheelDto } from './dto/create-hotwheel.dto';
 import { normalizeCode } from './utils/normalize-code.util';
@@ -10,12 +10,16 @@ export class CatalogService {
   async create(dto: CreateHotWheelDto) {
     const normalizedCode = normalizeCode(dto.code);
 
-    const existing = await this.prisma.hotWheel.findUnique({
-      where: { code: normalizedCode },
+    // O mesmo código pode existir para carrinhos diferentes; só bloqueamos o mesmo código com o mesmo nome
+    const existing = await this.prisma.hotWheel.findFirst({
+      where: {
+        code: normalizedCode,
+        name: { equals: dto.name, mode: 'insensitive' },
+      },
     });
 
     if (existing) {
-      throw new ConflictException('Já existe um Hot Wheels cadastrado com esse código.');
+      throw new ConflictException('Esse Hot Wheels já está cadastrado com esse código.');
     }
 
     return this.prisma.hotWheel.create({
@@ -23,8 +27,10 @@ export class CatalogService {
     });
   }
 
+  // Limitado a 100 para não devolver o catálogo inteiro de uma vez
   async findAll() {
     return this.prisma.hotWheel.findMany({
+      take: 100,
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -32,14 +38,16 @@ export class CatalogService {
   async findByCode(code: string) {
     const normalizedCode = normalizeCode(code);
 
-    const hotWheel = await this.prisma.hotWheel.findUnique({
+    const items = await this.prisma.hotWheel.findMany({
       where: { code: normalizedCode },
+      orderBy: [{ year: 'desc' }, { name: 'asc' }],
     });
 
-    if (!hotWheel) {
-      return { found: false, code: normalizedCode };
-    }
-
-    return { found: true, data: hotWheel };
+    return {
+      found: items.length > 0,
+      code: normalizedCode,
+      count: items.length,
+      items,
+    };
   }
 }

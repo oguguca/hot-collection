@@ -1,17 +1,14 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddToGarageDto } from './dto/add-to-garage.dto';
-import { normalizeCode } from '../catalog/utils/normalize-code.util';
 
 @Injectable()
 export class GarageService {
   constructor(private readonly prisma: PrismaService) {}
 
   async addToGarage(userId: string, dto: AddToGarageDto) {
-    const normalizedCode = normalizeCode(dto.hotWheelCode);
-
     const hotWheel = await this.prisma.hotWheel.findUnique({
-      where: { code: normalizedCode },
+      where: { id: dto.hotWheelId },
     });
 
     if (!hotWheel) {

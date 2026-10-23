@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,48 +18,47 @@ import { api } from '@/services/api';
 import { HotWheelCard } from '@/components/hot-wheel-card';
 import type { HotWheel } from '@/types/hot-wheel';
 
-type SearchState = 'idle' | 'loading' | 'found' | 'not-found';
+type SearchState = 'idle' | 'loading' | 'found' | 'not-found' | 'error';
 
 export default function AdicionarScreen() {
   const [code, setCode] = useState('');
   const [state, setState] = useState<SearchState>('idle');
-  const [result, setResult] = useState<HotWheel | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [added, setAdded] = useState(false);
+  const [results, setResults] = useState<HotWheel[]>([]);
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [addedIds, setAddedIds] = useState<string[]>([]);
   const [addError, setAddError] = useState('');
 
   async function handleSearch() {
     if (!code.trim()) return;
 
     setState('loading');
-    setAdded(false);
+    setAddedIds([]);
     setAddError('');
 
     try {
       const response = await api.get(`/hot-wheels/code/${encodeURIComponent(code.trim())}`);
       if (response.data.found) {
-        setResult(response.data.data);
+        setResults(response.data.items);
         setState('found');
       } else {
+        setResults([]);
         setState('not-found');
       }
     } catch {
-      setState('not-found');
+      setState('error');
     }
   }
 
-  async function handleAddToGarage() {
-    if (!result) return;
-
-    setAdding(true);
+  async function handleAddToGarage(item: HotWheel) {
+    setAddingId(item.id);
     setAddError('');
     try {
-      await api.post('/my-garage', { hotWheelCode: result.code });
-      setAdded(true);
+      await api.post('/my-garage', { hotWheelId: item.id });
+      setAddedIds((current) => [...current, item.id]);
     } catch {
       setAddError('Não foi possível adicionar. Tente de novo.');
     } finally {
-      setAdding(false);
+      setAddingId(null);
     }
   }
 
@@ -103,30 +103,67 @@ export default function AdicionarScreen() {
             </View>
           )}
 
-          {state === 'found' && result && (
-            <View style={styles.resultBlock}>
-              <HotWheelCard hotWheel={result} />
-
-              {added ? (
-                <View style={styles.addedRow}>
-                  <Ionicons name="checkmark-circle" size={18} color={colors.feedback.success} />
-                  <Text style={styles.addedText}>Adicionado à garagem!</Text>
-                </View>
-              ) : (
-                <Pressable style={styles.addButton} onPress={handleAddToGarage} disabled={adding}>
-                  {adding ? (
-                    <ActivityIndicator color={colors.text.primary} />
-                  ) : (
-                    <>
-                      <Ionicons name="add" size={18} color={colors.text.primary} />
-                      <Text style={styles.addButtonText}>Adicionar à garagem</Text>
-                    </>
-                  )}
-                </Pressable>
-              )}
-
-              {addError !== '' && <Text style={styles.error}>{addError}</Text>}
+          {state === 'error' && (
+            <View style={[styles.feedback, styles.feedbackCard]}>
+              <Ionicons name="cloud-offline" size={24} color={colors.feedback.danger} />
+              <Text style={styles.feedbackText}>
+                Não foi possível consultar o catálogo. Verifique sua conexão e tente de novo.
+              </Text>
             </View>
+          )}
+
+          {state === 'found' && (
+            <FlatList
+              style={styles.list}
+              data={results}
+              keyExtractor={(item) => item.id}
+              keyboardShouldPersistTaps="handled"
+              ListHeaderComponent={
+                results.length > 1 ? (
+                  <Text style={styles.multiple}>
+                    Esse código aparece em {results.length} carrinhos. Escolha o seu:
+                  </Text>
+                ) : null
+              }
+              ListFooterComponent={
+                addError !== '' ? <Text style={styles.error}>{addError}</Text> : null
+              }
+              renderItem={({ item }) => {
+                const added = addedIds.includes(item.id);
+                const adding = addingId === item.id;
+
+                return (
+                  <View style={styles.resultBlock}>
+                    <HotWheelCard hotWheel={item} />
+
+                    {added ? (
+                      <View style={styles.addedRow}>
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={18}
+                          color={colors.feedback.success}
+                        />
+                        <Text style={styles.addedText}>Adicionado à garagem!</Text>
+                      </View>
+                    ) : (
+                      <Pressable
+                        style={styles.addButton}
+                        onPress={() => handleAddToGarage(item)}
+                        disabled={adding}>
+                        {adding ? (
+                          <ActivityIndicator color={colors.text.primary} />
+                        ) : (
+                          <>
+                            <Ionicons name="add" size={18} color={colors.text.primary} />
+                            <Text style={styles.addButtonText}>Adicionar à garagem</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              }}
+            />
           )}
         </View>
       </KeyboardAvoidingView>
@@ -178,8 +215,16 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     flex: 1,
   },
-  resultBlock: {
+  list: {
     marginTop: spacing.lg,
+  },
+  multiple: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  resultBlock: {
+    marginBottom: spacing.md,
     gap: spacing.xs,
   },
   addButton: {
