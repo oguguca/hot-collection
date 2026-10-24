@@ -1,5 +1,6 @@
 // Funções compartilhadas para ler as páginas da Hot Wheels Wiki (Fandom, CC BY-SA).
 const WIKI_API = 'https://hotwheels.fandom.com/api.php';
+const CODE_RE = /^(?=.*\d)[A-Z0-9]{4,8}$/;
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -33,6 +34,29 @@ export async function listCategoryPages(category) {
       if (member.ns === 0) titles.push(member.title);
     }
     cont = data.continue?.cmcontinue ?? null;
+    await sleep(300);
+  } while (cont);
+  return titles;
+}
+
+// Lista as páginas cujo título começa com um prefixo (ex: "2024")
+export async function listPagesByPrefix(prefix) {
+  const titles = [];
+  let cont = null;
+  do {
+    const params = new URLSearchParams({
+      action: 'query',
+      list: 'allpages',
+      apprefix: prefix,
+      aplimit: '500',
+      apnamespace: '0',
+      format: 'json',
+    });
+    if (cont) params.set('apcontinue', cont);
+    const response = await fetch(`${WIKI_API}?${params}`);
+    const data = await response.json();
+    for (const page of data.query?.allpages ?? []) titles.push(page.title);
+    cont = data.continue?.apcontinue ?? null;
     await sleep(300);
   } while (cont);
   return titles;
@@ -172,7 +196,7 @@ export function parseTable({ headings, lines }) {
   const find = (re) => headerLabels.findIndex((label) => re.test(label));
   const idx = {
     toy: find(/^toy\b/),
-    name: find(/casting|model\s*name|^name$|^model$/),
+    name: find(/casting|model\s*name|car\s*name|^name$|^model$/),
     series: find(/^series(\s*name)?$/),
     seriesNumber: find(/series\s*#|^series\s*no/),
     colNumber: find(/^col(lector)?\.?\s*(#|no\.?)?$/),
@@ -197,32 +221,52 @@ export function parseTable({ headings, lines }) {
 
   for (const cells of grid) {
     const get = (i) => (i >= 0 && cells[i] != null ? cleanWikiText(cells[i]) : '');
-    const toyNumber = get(idx.toy).toUpperCase().replace(/\s+/g, '');
     const name = get(idx.name);
 
-    if (!/^(?=.*\d)[A-Z0-9]{4,8}$/.test(toyNumber) || !name) {
+    // Uma célula pode ter mais de um código (ex: "HRY51 / HRY52").
+    // Códigos só numéricos só valem se forem o primeiro (evita pegar um ano por engano).
+    const tokens = get(idx.toy)
+      .toUpperCase()
+      .split(/[^A-Z0-9]+/)
+      .filter((c) => CODE_RE.test(c));
+    const codes = [...new Set(tokens.filter((c, i) => i === 0 || /[A-Z]/.test(c)))];
+
+    if (codes.length === 0 || !name) {
       skipped++;
       continue;
     }
 
-    items.push({
-      toyNumber,
-      name,
-      series: get(idx.series).split(' · ')[0] || null,
-      seriesNumber: get(idx.seriesNumber) || null,
-      colNumber: get(idx.colNumber) || null,
-      theme: get(idx.theme) || null,
-      bodyColor: get(idx.bodyColor) || null,
-      notes: get(idx.notes) || null,
-    });
+    for (const toyNumber of codes) {
+      items.push({
+        toyNumber,
+        name,
+        series: get(idx.series).split(' · ')[0] || null,
+        seriesNumber: get(idx.seriesNumber) || null,
+        colNumber: get(idx.colNumber) || null,
+        theme: get(idx.theme) || null,
+        bodyColor: get(idx.bodyColor) || null,
+        notes: get(idx.notes) || null,
+      });
+    }
   }
 
   return { headings, headers: headerLabels, layout, recognized: true, items, skipped };
 }
 
+// Separa "(2nd Color)" do nome, como o importador antigo fazia
+export function splitVariation(rawName) {
+  const match = rawName.match(/\s*\(([^)]*colou?r[^)]*)\)\s*/i);
+  if (!match) return { name: rawName.trim(), variation: null };
+  return {
+    name: rawName.replace(match[0], ' ').replace(/\s+/g, ' ').trim(),
+    variation: match[1].trim(),
+  };
+}
+
 // "List of 2024 Hot Wheels" -> Mainline | "2024 Car Culture" -> Car Culture
 export function deriveLine(pageTitle) {
-  if (/^List of \d{4} Hot Wheels$/i.test(pageTitle)) return 'Mainline';
+  const mainline = pageTitle.match(/^List of (?:19|20)\d{2} Hot Wheels\s*(.*)$/i);
+  if (mainline) return mainline[1] ? `Mainline ${mainline[1]}` : 'Mainline';
   const line = pageTitle
     .replace(/^List of /i, '')
     .replace(/\b(19|20)\d{2}\b/g, '')
@@ -237,6 +281,17 @@ export function deriveYear(pageTitle, headings) {
   if (fromTitle) return parseInt(fromTitle[0], 10);
   for (const heading of headings) {
     if (/^(19|20)\d{2}$/.test(heading)) return parseInt(heading, 10);
+  }
+  return null;
+}
+
+// Nome da seção da tabela (ex: "Mix 1", "German Racers"), ignorando títulos que são só o ano
+export function deriveSection(pageTitle, headings) {
+  for (let i = headings.length - 1; i >= 0; i--) {
+    const heading = headings[i];
+    if (!heading || /^(19|20)\d{2}$/.test(heading)) continue;
+    if (heading.toLowerCase() === pageTitle.toLowerCase()) continue;
+    return heading;
   }
   return null;
 }

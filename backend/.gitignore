@@ -61,3 +61,13 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 /generated/prisma
 
 type .gitignore
+
+.wiki-cache/
+import-report.txt
+survey-report.txt
+wikitext-*.txt
+
+.wiki-cache/
+import-report.txt
+survey-report.txt
+wikitext-*.txt
