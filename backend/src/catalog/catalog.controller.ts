@@ -2,12 +2,14 @@ import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { CatalogService } from './catalog.service';
 import { CreateHotWheelDto } from './dto/create-hotwheel.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../auth/guards/admin.guard';
 
 @Controller('hot-wheels')
 export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
-  @UseGuards(JwtAuthGuard)
+  // Só administradores (ADMIN_EMAILS); usuários comuns não criam carrinhos no catálogo
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post()
   create(@Body() dto: CreateHotWheelDto) {
     return this.catalogService.create(dto);
