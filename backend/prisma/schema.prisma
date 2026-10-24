@@ -49,6 +49,7 @@ model HotWheel {
   bodyColor         String?
   collection        String?
   collectionNumber  String?
+  collectionTotal   Int?
   seriesNumber      String?
   imageUrl          String?
   packagingImageUrl String?

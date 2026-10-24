@@ -1,7 +1,21 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateHotWheelDto } from './dto/create-hotwheel.dto';
 import { normalizeCode } from './utils/normalize-code.util';
+import { splitCollectionNumber } from './utils/collection-number.util';
+
+// "120/365" no número vira número 120 + total 365; o total nunca fica embutido no texto
+export function normalizeCollection(dto: Pick<CreateHotWheelDto, 'collectionNumber' | 'collectionTotal'>) {
+  const { number, total } = splitCollectionNumber(dto.collectionNumber);
+  if (total && dto.collectionTotal && total !== dto.collectionTotal) {
+    throw new BadRequestException('O total do número de coleção não confere com collectionTotal.');
+  }
+  const collectionTotal = dto.collectionTotal ?? total ?? null;
+  if (collectionTotal && /^\d+$/.test(number ?? '') && parseInt(number!, 10) > collectionTotal) {
+    throw new BadRequestException('O número de coleção é maior que o total.');
+  }
+  return { collectionNumber: number, collectionTotal };
+}
 
 @Injectable()
 export class CatalogService {
@@ -23,7 +37,7 @@ export class CatalogService {
     }
 
     return this.prisma.hotWheel.create({
-      data: { ...dto, code: normalizedCode },
+      data: { ...dto, code: normalizedCode, ...normalizeCollection(dto) },
     });
   }
 

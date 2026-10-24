@@ -253,6 +253,45 @@ export function parseTable({ headings, lines }) {
   return { headings, headers: headerLabels, layout, recognized: true, items, skipped };
 }
 
+// "120/365" -> { number: "120", total: 365 }. O número fica como texto ("008", "No #").
+// Só separa o formato exato número/número; qualquer outra coisa fica como veio, sem total.
+export function splitCollectionNumber(raw) {
+  if (raw == null) return { number: null, total: null };
+  const text = String(raw)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/[​ ]/g, ' ')
+    .trim();
+  if (!text) return { number: null, total: null };
+  const match = text.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (!match) return { number: text, total: null };
+  const total = parseInt(match[2], 10);
+  if (total < 1 || parseInt(match[1], 10) > total) return { number: text, total: null };
+  return { number: match[1], total };
+}
+
+// Total declarado no título da seção da tabela: "Hot Wheels #1-365", "#1 – 250"
+export function totalFromHeadings(headings) {
+  for (const heading of [...headings].reverse()) {
+    const match = heading.match(/#\s*0*1\s*[-–]\s*(\d{2,4})\b/);
+    if (match) return parseInt(match[1], 10);
+  }
+  return null;
+}
+
+// Número e total de coleção de uma linha de tabela.
+// O total vem da célula ("3/5") ou do título da seção; sem uma das duas fontes fica nulo.
+export function resolveCollectionNumber(rawColNumber, headings = []) {
+  const cell = splitCollectionNumber(rawColNumber);
+  if (cell.total) return { collectionNumber: cell.number, collectionTotal: cell.total, totalFrom: 'cell' };
+
+  const headingTotal = totalFromHeadings(headings);
+  const isPlainNumber = /^\d+$/.test(cell.number ?? '');
+  if (headingTotal && isPlainNumber && parseInt(cell.number, 10) <= headingTotal) {
+    return { collectionNumber: cell.number, collectionTotal: headingTotal, totalFrom: 'heading' };
+  }
+  return { collectionNumber: cell.number, collectionTotal: null, totalFrom: null };
+}
+
 // Separa "(2nd Color)" do nome, como o importador antigo fazia
 export function splitVariation(rawName) {
   const match = rawName.match(/\s*\(([^)]*colou?r[^)]*)\)\s*/i);

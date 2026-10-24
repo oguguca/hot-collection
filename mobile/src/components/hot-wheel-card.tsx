@@ -10,6 +10,16 @@ type Props = {
   quantity?: number;
 };
 
+// "#120/365" com total confirmado, "#120" sem total. "No #", "N/A" e valores quebrados não aparecem.
+// Registros antigos ainda com "120/250" no texto continuam aparecendo como estão.
+export function formatCollectionNumber(hw: Pick<HotWheel, 'collectionNumber' | 'collectionTotal'>) {
+  const number = hw.collectionNumber?.trim();
+  if (!number) return null;
+  if (/^\d+\/\d+$/.test(number)) return `#${number}`;
+  if (!/^\d+$/.test(number)) return null;
+  return hw.collectionTotal ? `#${number}/${hw.collectionTotal}` : `#${number}`;
+}
+
 // Mainline mostra série e número da coleção. Pop Culture mostra franquia e cor.
 function buildBadges(hw: HotWheel): string[] {
   const badges: string[] = [];
@@ -19,7 +29,8 @@ function buildBadges(hw: HotWheel): string[] {
     if (hw.bodyColor) badges.push(hw.bodyColor);
   } else {
     if (hw.series) badges.push(hw.series);
-    if (hw.collectionNumber) badges.push(hw.collectionNumber);
+    const collection = formatCollectionNumber(hw);
+    if (collection) badges.push(collection);
   }
 
   if (hw.variation) badges.push(hw.variation);

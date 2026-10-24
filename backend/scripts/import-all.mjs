@@ -17,6 +17,7 @@ import {
   deriveLine,
   deriveYear,
   deriveSection,
+  resolveCollectionNumber,
 } from './lib/wiki-parser.mjs';
 
 const prisma = new PrismaClient();
@@ -162,6 +163,11 @@ for (const title of [...titles].sort()) {
       for (const item of table.items) {
         rowsRead++;
         const { name, variation } = splitVariation(item.name);
+        // Número e total separados; o total só entra quando a Wiki o informa
+        const { collectionNumber, collectionTotal } = resolveCollectionNumber(
+          item.colNumber,
+          table.headings,
+        );
         candidates.push({
           code: item.toyNumber,
           toyNumber: item.toyNumber,
@@ -170,7 +176,8 @@ for (const title of [...titles].sort()) {
           year,
           series: item.series ?? section,
           seriesNumber: item.seriesNumber,
-          collectionNumber: item.colNumber,
+          collectionNumber,
+          collectionTotal,
           theme: item.theme,
           bodyColor: item.bodyColor,
           description: item.notes,

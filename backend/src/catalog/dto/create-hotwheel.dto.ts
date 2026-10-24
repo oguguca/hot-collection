@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateHotWheelDto {
   @IsString()
@@ -34,6 +34,11 @@ export class CreateHotWheelDto {
   @IsOptional()
   @IsString()
   collectionNumber?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  collectionTotal?: number;
 
   @IsOptional()
   @IsString()
