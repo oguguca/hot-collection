@@ -20,6 +20,23 @@ export function formatCollectionNumber(hw: Pick<HotWheel, 'collectionNumber' | '
   return hw.collectionTotal ? `#${number}/${hw.collectionTotal}` : `#${number}`;
 }
 
+type TagStyle = 'sth' | 'th' | 'default';
+const TAGS: Record<string, { label: string; style: TagStyle }> = {
+  'Super Treasure Hunt': { label: 'Super TH', style: 'sth' },
+  'Treasure Hunt': { label: 'Treasure Hunt', style: 'th' },
+  'First Edition': { label: '1ª Edição', style: 'default' },
+  'New Model': { label: 'Novo Modelo', style: 'default' },
+  'Mystery Model': { label: 'Mystery', style: 'default' },
+};
+const TAG_ORDER = Object.keys(TAGS);
+
+// Etiquetas do catálogo, das mais raras para as comuns. Etiquetas desconhecidas aparecem como vieram.
+export function buildTagBadges(hw: Pick<HotWheel, 'tags'>) {
+  return [...(hw.tags ?? [])]
+    .sort((a, b) => (TAG_ORDER.indexOf(a) + 1 || 99) - (TAG_ORDER.indexOf(b) + 1 || 99))
+    .map((tag) => TAGS[tag] ?? { label: tag, style: 'default' as TagStyle });
+}
+
 // Mainline mostra série e número da coleção. Pop Culture mostra franquia e cor.
 function buildBadges(hw: HotWheel): string[] {
   const badges: string[] = [];
@@ -33,7 +50,8 @@ function buildBadges(hw: HotWheel): string[] {
     if (collection) badges.push(collection);
   }
 
-  if (hw.variation) badges.push(hw.variation);
+  // A variante STH já aparece como etiqueta; não repete "Super Treasure Hunt"
+  if (hw.variation && !hw.tags?.includes(hw.variation)) badges.push(hw.variation);
   return badges;
 }
 
@@ -41,6 +59,7 @@ export function HotWheelCard({ hotWheel, favorite = false, quantity = 1 }: Props
   const line = hotWheel.line ?? 'Mainline';
   const isSpecialLine = line !== 'Mainline';
   const badges = buildBadges(hotWheel);
+  const tagBadges = buildTagBadges(hotWheel);
 
   return (
     <View style={[styles.card, shadow.card]}>
@@ -63,6 +82,13 @@ export function HotWheelCard({ hotWheel, favorite = false, quantity = 1 }: Props
         </Text>
 
         <View style={styles.badgeRow}>
+          {tagBadges.map(({ label, style }) => (
+            <View key={label} style={[styles.badge, style === 'sth' && styles.badgeSth, style === 'th' && styles.badgeTh]}>
+              <Text style={[styles.badgeText, style === 'sth' && styles.badgeSthText, style === 'th' && styles.badgeThText]}>
+                {label}
+              </Text>
+            </View>
+          ))}
           <View style={[styles.badge, isSpecialLine && styles.badgeLine]}>
             <Text style={[styles.badgeText, isSpecialLine && styles.badgeLineText]}>{line}</Text>
           </View>
@@ -142,5 +168,17 @@ const styles = StyleSheet.create({
   },
   badgeLineText: {
     color: colors.flame[500],
+  },
+  badgeSth: {
+    backgroundColor: colors.flame[600],
+  },
+  badgeSthText: {
+    color: colors.text.primary,
+  },
+  badgeTh: {
+    backgroundColor: colors.feedback.warning,
+  },
+  badgeThText: {
+    color: colors.background[900],
   },
 });

@@ -12,4 +12,6 @@ export type HotWheel = {
   collectionTotal?: number | null;
   seriesNumber: string | null;
   variation: string | null;
+  // Etiquetas do catálogo: "Treasure Hunt", "Super Treasure Hunt", "First Edition", "New Model", "Mystery Model"
+  tags?: string[];
 };
