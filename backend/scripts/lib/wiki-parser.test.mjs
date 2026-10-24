@@ -8,7 +8,43 @@ import {
   resolveCollectionNumber,
   extractTables,
   parseTable,
+  cleanWikiText,
+  splitVariation,
 } from './wiki-parser.mjs';
+
+test('splitVariation não deixa "·" solto quando a cor vinha depois de um <br>', () => {
+  assert.deepEqual(splitVariation(cleanWikiText('[[Ford Focus RS]]<br />(2nd Color)')), {
+    name: 'Ford Focus RS',
+    variation: '2nd Color',
+  });
+  assert.deepEqual(splitVariation('Ford Focus RS (2nd Color)'), {
+    name: 'Ford Focus RS',
+    variation: '2nd Color',
+  });
+});
+
+test('cleanWikiText não deixa "·" solto nas pontas', () => {
+  assert.equal(cleanWikiText('Ram 1500<br>'), 'Ram 1500');
+  assert.equal(cleanWikiText('<br />Epic Fast'), 'Epic Fast');
+  assert.equal(cleanWikiText('Base code(s): M31<br><br>'), 'Base code(s): M31');
+  assert.equal(cleanWikiText('Base code(s):<br>'), 'Base code(s):');
+  // "·" no meio continua (separa duas informações)
+  assert.equal(cleanWikiText('Porsche Carrera<br>P-911'), 'Porsche Carrera · P-911');
+});
+
+test('parseTable limpa atributos de célula e <font> da série', () => {
+  const wikitext = [
+    '{|',
+    '! Toy # !! Col. # !! Model Name !! Series !! Series #',
+    '|-',
+    '| BFF39 || 106 || [[Ram 1500]]<br> || bgcolor="purple" |<font color="black">HW Glow Wheels</font> || 2/5',
+    '|}',
+  ].join('\n');
+  const [table] = extractTables(wikitext).map(parseTable);
+  assert.equal(table.items[0].name, 'Ram 1500');
+  assert.equal(table.items[0].series, 'HW Glow Wheels');
+  assert.equal(table.items[0].seriesNumber, '2/5');
+});
 
 test('splitCollectionNumber separa só o formato número/número', () => {
   assert.deepEqual(splitCollectionNumber('120/365'), { number: '120', total: 365 });

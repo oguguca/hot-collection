@@ -79,6 +79,8 @@ export function cleanWikiText(text) {
     .replace(/&amp;/g, '&')
     .replace(/&nbsp;/g, ' ')
     .replace(/\s+/g, ' ')
+    // um <br> no começo ou no fim da célula deixava um "·" solto (ex: "Ram 1500 ·")
+    .replace(/^\s*(?:·\s*)+|(?:\s*·)+\s*$/g, '')
     .trim();
 }
 
@@ -297,7 +299,12 @@ export function splitVariation(rawName) {
   const match = rawName.match(/\s*\(([^)]*colou?r[^)]*)\)\s*/i);
   if (!match) return { name: rawName.trim(), variation: null };
   return {
-    name: rawName.replace(match[0], ' ').replace(/\s+/g, ' ').trim(),
+    // "Ford Focus RS · (2nd Color)" -> "Ford Focus RS" (o "·" veio de um <br> antes da cor)
+    name: rawName
+      .replace(match[0], ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^\s*(?:·\s*)+|(?:\s*·)+\s*$/g, '')
+      .trim(),
     variation: match[1].trim(),
   };
 }
