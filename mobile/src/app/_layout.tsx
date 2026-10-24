@@ -47,6 +47,8 @@ function RootNavigation() {
         <Stack.Screen name="login" />
         <Stack.Screen name="register" />
       </Stack.Protected>
+      {/* Créditos dos dados (CC BY-SA): acessível com ou sem login */}
+      <Stack.Screen name="sobre-dados" />
     </Stack>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 import { colors, typography, spacing, borderRadius, shadow } from '@/theme';
 import { useAuth } from '@/contexts/auth-context';
@@ -97,6 +98,15 @@ export default function PerfilScreen() {
           )}
         </View>
 
+        <Pressable style={[styles.card, styles.linkRow]} onPress={() => router.push('/sobre-dados')}>
+          <Ionicons name="information-circle-outline" size={20} color={colors.chrome[300]} />
+          <View style={styles.info}>
+            <Text style={styles.name}>Sobre os dados</Text>
+            <Text style={styles.email}>Fonte, licença CC BY-SA e créditos</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.chrome[500]} />
+        </Pressable>
+
         <Pressable
           style={[styles.logoutButton, loggingOut && styles.logoutButtonDisabled]}
           onPress={handleLogout}
@@ -144,8 +154,8 @@ const styles = StyleSheet.create({
   planCard: {
     flexDirection: 'column',
     alignItems: 'stretch',
-    marginBottom: spacing.xl,
   },
+  linkRow: { marginBottom: spacing.xl },
   planHeader: {
     flexDirection: 'row',
     alignItems: 'center',
