@@ -15,7 +15,14 @@
 //   node scripts/fix-treasure-hunts.mjs --save   -> grava (numa única transação; desfaz tudo se algo não bater)
 import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
-import { extractTables, parseTable, splitVariation, sameCar, treasureHuntKind } from './lib/wiki-parser.mjs';
+import {
+  extractTables,
+  parseTable,
+  splitVariation,
+  sameCar,
+  treasureHuntKind,
+  applyWikiErrata,
+} from './lib/wiki-parser.mjs';
 
 const prisma = new PrismaClient();
 const SAVE = process.argv.includes('--save');
@@ -40,8 +47,10 @@ for (const page of thPages.values()) {
   for (const table of extractTables(page.wikitext).map(parseTable)) {
     if (!table.recognized) continue;
     const kind = treasureHuntKind(table.headings);
-    for (const item of table.items) {
-      truth.push({ year, code: item.toyNumber, name: splitVariation(item.name).name, bodyColor: item.bodyColor, series: item.series, kind, url });
+    for (const raw of table.items) {
+      const item = applyWikiErrata(raw, page.title);
+      const { name, variation } = splitVariation(item.name);
+      truth.push({ year, code: item.toyNumber, name, variation, bodyColor: item.bodyColor, series: item.series, kind, url });
     }
   }
 }
@@ -100,7 +109,11 @@ for (const t of truth) {
   // Variante STH já criada: o TH nunca é ela; o STH é ela (rodar o script de novo não muda nada)
   const candidates = sameCode.filter((r) => sameCar(r.name, t.name));
   const variant = candidates.find((r) => r.variation === STH);
-  const matched = t.kind === STH && variant ? [variant] : candidates.filter((r) => r.variation !== STH);
+  // Variações de cor têm registro próprio: vale o da mesma cor da página de TH, se existir
+  const regular = candidates.filter((r) => r.variation !== STH);
+  const colorKey = (v) => (v ?? '').trim().toLowerCase();
+  const sameColor = regular.filter((r) => colorKey(r.variation) === colorKey(t.variation));
+  const matched = t.kind === STH && variant ? [variant] : sameColor.length ? sameColor : regular;
 
   if (matched.length === 0) {
     manual.push({ motivo: sameCode.length ? 'mesmo código, nome de outro carrinho' : 'não está no banco', ...pick(t), noBanco: sameCode.map(short) });

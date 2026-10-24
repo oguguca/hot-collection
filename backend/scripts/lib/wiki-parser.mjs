@@ -239,11 +239,18 @@ export function parseTable({ headings, lines }) {
       continue;
     }
 
+    // Célula da série: 1ª linha é a série; as outras são anotações ("Kmart Exclusive", "5/10"...)
+    const seriesParts = get(idx.series)
+      .split(' · ')
+      .map((part) => part.trim())
+      .filter(Boolean);
+
     for (const toyNumber of codes) {
       items.push({
         toyNumber,
         name,
-        series: get(idx.series).split(' · ')[0] || null,
+        series: seriesParts[0] || null,
+        seriesNotes: seriesParts.slice(1),
         seriesNumber: get(idx.seriesNumber) || null,
         colNumber: get(idx.colNumber) || null,
         theme: get(idx.theme) || null,
@@ -314,6 +321,91 @@ export function sameCar(a, b) {
   return [...small].every((t) => big.has(t)) && [...small].join('').length >= 4;
 }
 
+// Páginas que listam subconjuntos de carrinhos de outra linha ("pai"). O carrinho do subconjunto é o
+// mesmo da linha pai: fica um registro só, com a etiqueta. parent '*' = qualquer linha principal;
+// parent null = variante física própria (ex: versão ZAMAC sem pintura), nunca é fundida.
+export const SUBSET_RULES = [
+  { re: /^super treasure hunts?$/i, tag: 'Super Treasure Hunt', parent: '*' },
+  { re: /^treasure hunts$/i, tag: 'Treasure Hunt', parent: '*' },
+  { re: /^new models \(international\)$/i, tag: 'New Model', parent: 'Mainline (International)' },
+  { re: /^new models/i, tag: 'New Model', parent: 'Mainline' },
+  { re: /^zamac first editions$/i, tag: 'First Edition', parent: null },
+  { re: /first editions$/i, tag: 'First Edition', parent: 'Mainline' },
+  { re: /^mystery models$/i, tag: 'Mystery Model', parent: 'Mainline' },
+  { re: /^race world world earth series$/i, tag: null, parent: '*' },
+  { re: /^red line series$/i, tag: null, parent: '*' },
+];
+export const subsetOf = (line) => SUBSET_RULES.find((rule) => rule.re.test(line ?? '')) ?? null;
+
+// Anotações da célula da série (2ª linha em diante) viram etiquetas. Nada se perde: o que não é reconhecido
+// vira etiqueta com o próprio texto. Ignorados: posição na série ("5/10", já em seriesNumber) e TH/STH
+// (a fonte oficial são as páginas de Treasure Hunts).
+const STORE_NAMES = [
+  ['Family Dollar/Dollar Tree', /^(family dollar\s*\/\s*dollar tree|dollar tree\s*\/\s*family dollar)$/i],
+  ['Walmart', /^wal-?mart$/i],
+  ['Kmart', /^k-?mart$/i],
+  ['Target', /^target$/i],
+  ['Kroger', /^kroger$/i],
+  ['Dollar General', /^dollar general$/i],
+  ['Toys R Us', /^toys\s*"?r"?\s*us$/i],
+  ['GameStop', /^gamestop$/i],
+  ['Walgreens', /^walgreens$/i],
+  ['Best Buy', /^best buy$/i],
+  ['Meijer', /^meijer$/i],
+];
+export function tagsFromSeriesNotes(notes = []) {
+  const tags = [];
+  // "New for 2019!Kroger Exclusive": duas anotações coladas
+  const parts = notes.flatMap((n) => n.split(/(?<=!)(?=[A-Za-z])/));
+  for (const raw of parts) {
+    const note = raw
+      .replace(/[​"“”]/g, '')
+      .replace(/^[\s'·]+|[\s'·]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!note) continue;
+    if (/^\d+(\s*\/\s*\d+)?$/.test(note)) continue;
+    if (/^(super\s+)?treasure\s+hunts?$/i.test(note)) continue;
+    let tag = note;
+    // "Kmart Exclusive" ou só "Kmart" na célula da série
+    const store = note.match(/^(.+?)\s+exclusive$/i) ?? (STORE_NAMES.some(([, re]) => re.test(note)) ? [note, note] : null);
+    if (/^new\s*for\s*\d{4}!*$/i.test(note) || /^new models?$/i.test(note) || /^\d+\s+new models$/i.test(note)) {
+      tag = 'New Model';
+    } else if (/^new in mainline$/i.test(note)) {
+      tag = 'New in Mainline';
+    } else if (/^zamac( exclusive)?$/i.test(note)) {
+      tag = 'Zamac';
+    } else if (store) {
+      const name = STORE_NAMES.find(([, re]) => re.test(store[1].trim()));
+      tag = name ? `${name[0]} Exclusive` : note;
+    }
+    if (!tags.includes(tag)) tags.push(tag);
+  }
+  return tags;
+}
+
+// Erros conhecidos da própria Wiki, corrigidos com evidência na própria Wiki. Cada entrada diz qual linha
+// (página + código + nome) está errada e qual é o valor certo.
+export const WIKI_ERRATA = [
+  {
+    page: '2012 Treasure Hunts Series',
+    toyNumber: 'V5378',
+    name: "'70 Camaro Road Race",
+    fix: { toyNumber: 'V5371' },
+    // Os 15 STH de 2012 usam os códigos V5369-V5383 em sequência, cada um o código V53xx do carrinho comum
+    // de mesmo número. A Wiki repete V5378 (que é o '69 Camaro, nº 108) no '70 Camaro Road Race (nº 144),
+    // cujo código V53xx na lista principal é V5371 — justamente o que falta na sequência.
+    evidence: "List of 2012 Hot Wheels: nº 144 '70 Camaro Road Race = V5371/V5448; sequência V5369-V5383 sem V5371",
+  },
+];
+
+export function applyWikiErrata(item, pageTitle) {
+  const erratum = WIKI_ERRATA.find(
+    (e) => e.page === pageTitle && e.toyNumber === item.toyNumber && e.name === item.name,
+  );
+  return erratum ? { ...item, ...erratum.fix } : item;
+}
+
 // Tabela de uma página "AAAA Treasure Hunts Series": a de STH tem título "Super Treasure Hunts"
 // (ou "Trea$ure Hunt$" em 2007-2010); as outras são de TH comum
 export const treasureHuntKind = (headings) =>
@@ -321,7 +413,8 @@ export const treasureHuntKind = (headings) =>
 
 // Separa "(2nd Color)" do nome, como o importador antigo fazia
 export function splitVariation(rawName) {
-  const match = rawName.match(/\s*\(([^)]*colou?r[^)]*)\)\s*/i);
+  // Aceita o erro de digitação "(3rd Color}" que aparece na Wiki
+  const match = rawName.match(/\s*\(([^)}]*colou?r[^)}]*)[)}]\s*/i);
   if (!match) return { name: rawName.trim(), variation: null };
   return {
     // "Ford Focus RS · (2nd Color)" -> "Ford Focus RS" (o "·" veio de um <br> antes da cor)

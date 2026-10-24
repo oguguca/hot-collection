@@ -12,7 +12,53 @@ import {
   splitVariation,
   sameCar,
   treasureHuntKind,
+  tagsFromSeriesNotes,
+  applyWikiErrata,
+  subsetOf,
 } from './wiki-parser.mjs';
+
+test('tagsFromSeriesNotes: anotações da série viram etiquetas, sem perder nada', () => {
+  assert.deepEqual(tagsFromSeriesNotes(['Kmart Exclusive']), ['Kmart Exclusive']);
+  assert.deepEqual(tagsFromSeriesNotes(["'Walmart Exclusive", 'Wal-Mart Exclusive']), ['Walmart Exclusive']);
+  assert.deepEqual(tagsFromSeriesNotes(['Dollar Tree/Family Dollar Exclusive']), ['Family Dollar/Dollar Tree Exclusive']);
+  assert.deepEqual(tagsFromSeriesNotes(['New for 2024!', 'New Model', '10 New Models']), ['New Model']);
+  assert.deepEqual(tagsFromSeriesNotes(['New in Mainline']), ['New in Mainline']);
+  assert.deepEqual(tagsFromSeriesNotes(['Zamac Exclusive', 'Zamac']), ['Zamac']);
+  // Ignorados: posição na série e TH/STH (vêm das páginas de Treasure Hunts)
+  assert.deepEqual(tagsFromSeriesNotes(['5/10', '3/5​', 'Super Treasure Hunt', 'Treasure Hunt']), []);
+  assert.deepEqual(tagsFromSeriesNotes(['New for 2019!Kroger Exclusive']), ['New Model', 'Kroger Exclusive']);
+  assert.deepEqual(tagsFromSeriesNotes(['Kmart', '45']), ['Kmart Exclusive']);
+  // Desconhecido: fica com o próprio texto
+  assert.deepEqual(tagsFromSeriesNotes(["Ryu's Rides", '"From the Vault" Exclusive']), ["Ryu's Rides", 'From the Vault Exclusive']);
+});
+
+test('parseTable guarda as anotações da série em seriesNotes', () => {
+  const wikitext = [
+    '{|',
+    '! Toy # !! Model Name !! Series',
+    '|-',
+    "| DHY07 || Corvette C7.R || <font>HW Race Team<br>'''Kmart Exclusive'''</font>",
+    '|}',
+  ].join('\n');
+  const [table] = extractTables(wikitext).map(parseTable);
+  assert.equal(table.items[0].series, 'HW Race Team');
+  assert.deepEqual(table.items[0].seriesNotes, ['Kmart Exclusive']);
+});
+
+test('applyWikiErrata corrige só a linha anotada', () => {
+  const page = '2012 Treasure Hunts Series';
+  assert.equal(applyWikiErrata({ toyNumber: 'V5378', name: "'70 Camaro Road Race" }, page).toyNumber, 'V5371');
+  assert.equal(applyWikiErrata({ toyNumber: 'V5378', name: "'69 Camaro" }, page).toyNumber, 'V5378');
+  assert.equal(applyWikiErrata({ toyNumber: 'V5378', name: "'70 Camaro Road Race" }, 'Outra').toyNumber, 'V5378');
+});
+
+test('subsetOf: ZAMAC é variante própria; os outros subconjuntos têm linha pai', () => {
+  assert.equal(subsetOf('ZAMAC First Editions').parent, null);
+  assert.equal(subsetOf('First Editions').parent, 'Mainline');
+  assert.equal(subsetOf('New Models (International)').parent, 'Mainline (International)');
+  assert.equal(subsetOf('Mystery Models').tag, 'Mystery Model');
+  assert.equal(subsetOf('Car Culture'), null);
+});
 
 test('sameCar reconhece o mesmo carrinho escrito de outro jeito', () => {
   assert.equal(sameCar("'63 Split Window", "Split Window '63"), true);

@@ -14,6 +14,7 @@ import {
   splitVariation,
   splitCollectionNumber,
   resolveCollectionNumber,
+  applyWikiErrata,
 } from './lib/wiki-parser.mjs';
 
 const prisma = new PrismaClient();
@@ -46,11 +47,14 @@ function loadPage(title) {
     const { wikitext } = JSON.parse(fs.readFileSync(file, 'utf8'));
     for (const table of extractTables(wikitext).map(parseTable)) {
       if (!table.recognized) continue;
-      for (const item of table.items) {
+      for (const raw of table.items) {
+        const item = applyWikiErrata(raw, title);
         const resolved = resolveCollectionNumber(item.colNumber, table.headings);
+        const { name, variation } = splitVariation(item.name);
         entries.push({
           code: item.toyNumber,
-          name: normalizeName(splitVariation(item.name).name),
+          name: normalizeName(name),
+          variation: (variation ?? '').trim().toLowerCase(),
           number: resolved.collectionNumber,
           total: resolved.collectionTotal,
           totalFrom: FROM_LABEL[resolved.totalFrom] ?? null,
@@ -68,7 +72,7 @@ const rows = await prisma.$transaction(async (tx) => {
   await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
   return tx.hotWheel.findMany({
     where: { collectionNumber: { not: null } },
-    select: { id: true, code: true, name: true, year: true, line: true, sourceUrl: true, collectionNumber: true },
+    select: { id: true, code: true, name: true, year: true, line: true, variation: true, sourceUrl: true, collectionNumber: true, collectionTotal: true },
   });
 });
 
@@ -93,7 +97,10 @@ for (const row of rows) {
     const name = normalizeName(row.name);
     const candidates = entries.filter((e) => e.code === row.code);
     const byName = candidates.filter((e) => e.name === name || sameName(e.name, name));
-    const pool = byName.length ? byName : candidates.length === 1 ? candidates : [];
+    // Variações de cor têm registro próprio: vale a linha da mesma cor
+    const sameColor = byName.filter((e) => e.variation === (row.variation ?? '').trim().toLowerCase());
+    const named = sameColor.length ? sameColor : byName;
+    const pool = named.length ? named : candidates.length === 1 ? candidates : [];
     const entry = pool.find((e) => e.number === current.number) ?? pool[0];
 
     if (!entry) {
@@ -104,8 +111,10 @@ for (const row of rows) {
         ? parseInt(entry.number, 10) !== parseInt(current.number, 10)
         : (entry.number ?? '') !== (current.number ?? '');
       if (differs) {
+        // Páginas da Wiki que se contradizem (ou valor com erro de digitação): fica como está
         stats.numeroDiferente++;
-        flagged.push(`número difere: ${row.year} ${row.code} ${row.name} banco="${row.collectionNumber}" wiki="${entry.number}"`);
+        flagged.push(`número difere (mantido): ${row.year} ${row.code} ${row.name} banco="${row.collectionNumber}" wiki="${entry.number}"`);
+        continue;
       }
       number = entry.number ?? number;
       total = entry.total;
@@ -129,7 +138,8 @@ for (const row of rows) {
   y.totals.set(total ?? 'nulo', (y.totals.get(total ?? 'nulo') ?? 0) + 1);
   byYear.set(row.year, y);
 
-  if (number === row.collectionNumber && total === null) {
+  // Já está como deve (rodar de novo não muda nada)
+  if (number === row.collectionNumber && total === (row.collectionTotal ?? null)) {
     stats.semMudanca++;
     continue;
   }
@@ -137,7 +147,7 @@ for (const row of rows) {
     id: row.id,
     code: row.code,
     year: row.year,
-    before: { collectionNumber: row.collectionNumber },
+    before: { collectionNumber: row.collectionNumber, collectionTotal: row.collectionTotal ?? null },
     after: { collectionNumber: number, collectionTotal: total },
     totalFrom,
   });
