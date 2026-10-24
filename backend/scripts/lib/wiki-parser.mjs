@@ -1,6 +1,7 @@
 // Funções compartilhadas para ler as páginas da Hot Wheels Wiki (Fandom, CC BY-SA).
 const WIKI_API = 'https://hotwheels.fandom.com/api.php';
-const CODE_RE = /^(?=.*\d)[A-Z0-9]{4,8}$/;
+// Código de embalagem; "75PX" é a largura de uma imagem, não um código
+const CODE_RE = /^(?=.*\d)(?!\d+PX$)[A-Z0-9]{4,8}$/;
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -293,6 +294,30 @@ export function resolveCollectionNumber(rawColNumber, headings = []) {
   }
   return { collectionNumber: cell.number, collectionTotal: null, totalFrom: null };
 }
+
+// Nomes do mesmo carrinho escritos de jeitos diferentes: "'63 Split Window" = "Split Window '63",
+// "1971 Buick Riviera" = "'71 Buick Riviera", "Nomad" ⊂ "Classic Nomad"
+export function nameTokens(name) {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\b(?:19|20)(\d{2})\b/g, '$1')
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+export function sameCar(a, b) {
+  const ta = new Set(nameTokens(a));
+  const tb = new Set(nameTokens(b));
+  if (!ta.size || !tb.size) return false;
+  const [small, big] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  return [...small].every((t) => big.has(t)) && [...small].join('').length >= 4;
+}
+
+// Tabela de uma página "AAAA Treasure Hunts Series": a de STH tem título "Super Treasure Hunts"
+// (ou "Trea$ure Hunt$" em 2007-2010); as outras são de TH comum
+export const treasureHuntKind = (headings) =>
+  /super|\$/i.test(headings.join(' ')) ? 'Super Treasure Hunt' : 'Treasure Hunt';
 
 // Separa "(2nd Color)" do nome, como o importador antigo fazia
 export function splitVariation(rawName) {

@@ -10,7 +10,31 @@ import {
   parseTable,
   cleanWikiText,
   splitVariation,
+  sameCar,
+  treasureHuntKind,
 } from './wiki-parser.mjs';
+
+test('sameCar reconhece o mesmo carrinho escrito de outro jeito', () => {
+  assert.equal(sameCar("'63 Split Window", "Split Window '63"), true);
+  assert.equal(sameCar("'71 Buick Riviera", '1971 Buick Riviera'), true);
+  assert.equal(sameCar('Nomad', 'Classic Nomad'), true);
+  assert.equal(sameCar("'70 Chevy Chevelle SS", "'70 Chevy Chevelle"), true);
+  assert.equal(sameCar('1971 Plymouth GTX', "'70 Plymouth Barracuda"), false);
+  assert.equal(sameCar("'12 Ford Fiesta", 'Sky Knife'), false);
+});
+
+test('treasureHuntKind separa as tabelas de TH e de STH', () => {
+  assert.equal(treasureHuntKind(['2024 Treasure Hunts']), 'Treasure Hunt');
+  assert.equal(treasureHuntKind(['2024 Super Treasure Hunts']), 'Super Treasure Hunt');
+  assert.equal(treasureHuntKind(['2007 Trea$ure Hunt$']), 'Super Treasure Hunt');
+  assert.equal(treasureHuntKind(['Super Treasure Hunts']), 'Super Treasure Hunt');
+});
+
+test('parseTable não lê largura de imagem ("75px") como código', () => {
+  const wikitext = ['{|', '! Toy # !! Model Name', '|-', '| 75px || 75px', '|-', '| HTF30 || Ford Escort RS2000', '|}'].join('\n');
+  const [table] = extractTables(wikitext).map(parseTable);
+  assert.deepEqual(table.items.map((i) => i.toyNumber), ['HTF30']);
+});
 
 test('splitVariation não deixa "·" solto quando a cor vinha depois de um <br>', () => {
   assert.deepEqual(splitVariation(cleanWikiText('[[Ford Focus RS]]<br />(2nd Color)')), {

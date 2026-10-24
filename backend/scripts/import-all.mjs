@@ -3,6 +3,7 @@
 //   node scripts/import-all.mjs --save     -> grava no banco
 //   node scripts/import-all.mjs --refresh  -> ignora o cache local e busca tudo de novo na Wiki
 //   node scripts/import-all.mjs --verbose  -> relatório com a lista completa de páginas
+//   node scripts/import-all.mjs --offline  -> usa só as páginas do cache local, sem acessar a Wiki
 import fs from 'fs';
 import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
@@ -18,13 +19,22 @@ import {
   deriveYear,
   deriveSection,
   resolveCollectionNumber,
+  sameCar,
+  treasureHuntKind,
 } from './lib/wiki-parser.mjs';
 
 const prisma = new PrismaClient();
 const SAVE = process.argv.includes('--save');
 const REFRESH = process.argv.includes('--refresh');
 const VERBOSE = process.argv.includes('--verbose');
+const OFFLINE = process.argv.includes('--offline');
 const SOURCE = 'Hot Wheels Wiki (Fandom)';
+const STH = 'Super Treasure Hunt';
+
+if (OFFLINE && REFRESH) {
+  console.log('--offline e --refresh não podem ser usados juntos.');
+  process.exit(1);
+}
 
 // Anos futuros são anúncios que ainda podem mudar: ficam de fora até o lançamento
 const MAX_YEAR = 2026;
@@ -83,7 +93,17 @@ const SUBSET_RULES = [
 ];
 const subsetOf = (line) => SUBSET_RULES.find((rule) => rule.re.test(line)) ?? null;
 
+// Offline: as páginas do cache, pelo título real (depois dos redirecionamentos)
+const cachedByTitle = new Map();
+if (OFFLINE) {
+  for (const file of fs.readdirSync(CACHE_DIR)) {
+    const page = JSON.parse(fs.readFileSync(`${CACHE_DIR}/${file}`, 'utf8'));
+    if (page.ok) cachedByTitle.set(page.title, page);
+  }
+}
+
 async function fetchPage(title) {
+  if (OFFLINE) return cachedByTitle.get(title) ?? { ok: false, error: 'fora do cache' };
   const hash = crypto.createHash('sha1').update(title).digest('hex');
   const file = `${CACHE_DIR}/${hash}.json`;
   if (!REFRESH && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -95,12 +115,13 @@ async function fetchPage(title) {
 }
 
 console.log(SAVE ? 'MODO GRAVAÇÃO' : 'MODO TESTE (nada será gravado)');
+if (OFFLINE) console.log(`OFFLINE: ${cachedByTitle.size} páginas do cache, sem acessar a Wiki`);
 
 // 1. Quais páginas examinar
-const titles = new Set(EXTRA_PAGES);
+const titles = new Set(OFFLINE ? [...cachedByTitle.keys()].filter((t) => !EXCLUDE.test(t)) : EXTRA_PAGES);
 const discoveredTitles = new Set();
 
-for (const category of CATEGORIES) {
+for (const category of OFFLINE ? [] : CATEGORIES) {
   try {
     const members = await listCategoryPages(category);
     console.log(`Categoria "${category}": ${members.length} páginas`);
@@ -110,7 +131,7 @@ for (const category of CATEGORIES) {
   }
 }
 
-for (let year = 1968; year <= MAX_YEAR; year++) {
+for (let year = 1968; year <= (OFFLINE ? 0 : MAX_YEAR); year++) {
   try {
     for (const title of await listPagesByPrefix(String(year))) {
       if (titles.has(title) || EXCLUDE.test(title) || !KEYWORDS.test(title)) continue;
@@ -128,6 +149,7 @@ console.log(`Total de páginas a examinar: ${titles.size}`);
 const candidates = [];
 const pageRows = [];
 const unrecognized = new Map();
+const seenPages = new Set();
 let index = 0;
 
 for (const title of [...titles].sort()) {
@@ -141,8 +163,14 @@ for (const title of [...titles].sort()) {
       continue;
     }
 
-    const line = normalizeLine(deriveLine(title));
-    const url = `https://hotwheels.fandom.com/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
+    // Vários títulos redirecionam para a mesma página ("2007 Super Treasure Hunts" ->
+    // "2007 Treasure Hunts Series"): vale o título real, e cada página é lida uma vez só
+    const pageTitle = page.title ?? title;
+    if (seenPages.has(pageTitle)) continue;
+    seenPages.add(pageTitle);
+
+    const line = normalizeLine(deriveLine(pageTitle));
+    const url = `https://hotwheels.fandom.com/wiki/${encodeURIComponent(pageTitle.replace(/ /g, '_'))}`;
     const tables = extractTables(page.wikitext).map(parseTable);
     let rowsRead = 0;
     let skipped = 0;
@@ -157,8 +185,10 @@ for (const title of [...titles].sort()) {
       recognized++;
       skipped += table.skipped;
 
-      const year = deriveYear(title, table.headings);
-      const section = deriveSection(title, table.headings);
+      const year = deriveYear(pageTitle, table.headings);
+      const section = deriveSection(pageTitle, table.headings);
+      // Página de Treasure Hunts: a etiqueta (TH ou STH) depende da tabela, não da página
+      const thKind = line === 'Treasure Hunts' ? treasureHuntKind(table.headings) : null;
 
       for (const item of table.items) {
         rowsRead++;
@@ -185,12 +215,13 @@ for (const title of [...titles].sort()) {
           collection: [year, line].filter(Boolean).join(' '),
           source: SOURCE,
           sourceUrl: url,
-          _page: title,
+          _page: pageTitle,
+          _thKind: thKind,
         });
       }
     }
 
-    pageRows.push({ title, line, tablesTotal: tables.length, recognized, rowsRead, skipped });
+    pageRows.push({ title: pageTitle, line, tablesTotal: tables.length, recognized, rowsRead, skipped });
   } catch (error) {
     pageRows.push({ title, error: error.message });
   }
@@ -210,7 +241,7 @@ for (const c of candidates) {
     futureCount++;
     continue;
   }
-  c._subset = subsetOf(c.line);
+  c._subset = c._thKind ? { tag: c._thKind } : subsetOf(c.line);
   usable.push(c);
 }
 
@@ -221,21 +252,69 @@ usable.sort(
 
 // 4. Fundir repetidos (mesmo código + mesmo nome), guardando as etiquetas
 const byKey = new Map();
+const mainByCode = new Map(); // código -> carrinhos das linhas principais (nomes escritos de outro jeito)
+// O próprio TH/STH: linha "Treasure Hunts" ou série "Treasure Hunts"/"Super Treasure Hunts" na lista principal
+const isOwnThRecord = (r) =>
+  r.line === 'Treasure Hunts' || /^(super\s+)?treasure\s+hunts?$/i.test((r.series ?? '').trim());
+
+// Página de TH que usa o mesmo código para carrinhos diferentes no mesmo ano: sem etiqueta (decisão manual)
+const thNames = new Map();
+for (const c of usable.filter((u) => u._thKind)) {
+  const k = `${c.year}|${c.code}`;
+  if (!thNames.has(k)) thNames.set(k, []);
+  thNames.get(k).push(c.name);
+}
+const ambiguousTh = [];
+for (const c of usable.filter((u) => u._thKind)) {
+  const names = thNames.get(`${c.year}|${c.code}`);
+  if (names.some((n) => !sameCar(n, names[0]))) {
+    c._subset = { tag: null };
+    ambiguousTh.push(`${c.year} ${c.code} ${c._thKind} "${c.name}"`);
+  }
+}
 for (const c of usable) {
   const key = `${c.code}|${normalizeName(c.name)}`;
   const tag = c._subset?.tag ?? null;
-  const found = byKey.get(key);
+  let found = byKey.get(key);
+  if (!found && c._subset) {
+    found = (mainByCode.get(c.code) ?? []).find((m) => m.year === c.year && sameCar(m.name, c.name));
+  }
+
+  // STH que divide o código com o carrinho comum: vira variante própria, e o comum não leva a etiqueta.
+  // (STH com código próprio, como "M6967S" em 2007-2008, ou já listado como Treasure Hunt: só a etiqueta.)
+  // Se o registro também é o TH comum (listado nas duas tabelas), o STH é outra versão: variante também
+  const alsoTh = found?.tags.includes('Treasure Hunt');
+  if (found && tag === STH && (alsoTh || (!/S$/.test(c.code) && !isOwnThRecord(found)))) {
+    const variantKey = `${key}|sth`;
+    if (!byKey.has(variantKey)) {
+      byKey.set(variantKey, {
+        ...found,
+        bodyColor: c.bodyColor ?? null,
+        description: null,
+        variation: STH,
+        tags: [STH],
+        sourceUrl: c.sourceUrl,
+        _page: c._page,
+      });
+    }
+    continue;
+  }
   if (found) {
     if (tag && !found.tags.includes(tag)) found.tags.push(tag);
     continue;
   }
-  byKey.set(key, { ...c, tags: tag ? [tag] : [] });
+  const record = { ...c, tags: tag ? [tag] : [] };
+  byKey.set(key, record);
+  if (!c._subset) {
+    if (!mainByCode.has(c.code)) mainByCode.set(c.code, []);
+    mainByCode.get(c.code).push(record);
+  }
 }
 const distinct = [...byKey.values()];
 
 // 5. Comparar com o banco
 const existingRows = await prisma.hotWheel.findMany({
-  select: { id: true, code: true, name: true, line: true, tags: true },
+  select: { id: true, code: true, name: true, line: true, year: true, tags: true, variation: true },
 });
 const existingByCode = new Map();
 for (const row of existingRows) {
@@ -243,9 +322,14 @@ for (const row of existingRows) {
   existingByCode.get(row.code).push({
     id: row.id,
     name: normalizeName(row.name),
+    rawName: row.name,
+    isSthVariant: row.variation === STH,
     tags: row.tags ?? [],
+    year: row.year,
+    line: row.line,
   });
 }
+const yearMismatch = []; // já existe, mas a Wiki diz outro ano
 
 const newRecords = [];
 const alreadyThere = [];
@@ -253,13 +337,20 @@ const tagUpdates = new Map(); // etiqueta -> ids de carrinhos que já existem
 
 for (const c of distinct) {
   const normalized = normalizeName(c.name);
-  const match = (existingByCode.get(c.code) ?? []).find((e) => sameName(e.name, normalized));
+  // A variante STH só corresponde a outra variante STH; o carrinho comum, só a carrinhos comuns
+  const isSthVariant = c.variation === STH;
+  const match = (existingByCode.get(c.code) ?? []).find(
+    (e) => e.isSthVariant === isSthVariant && (sameName(e.name, normalized) || sameCar(e.rawName, c.name)),
+  );
 
   if (!match) {
     newRecords.push(c);
     continue;
   }
   alreadyThere.push(c);
+  if (c.year && match.year !== c.year) {
+    yearMismatch.push(`${match.line ?? '-'} | ${c.code} | ${c.name} | banco ${match.year ?? '-'} | Wiki ${c.year} | ${c._page}`);
+  }
   for (const tag of c.tags) {
     if (match.tags.includes(tag)) continue;
     if (!tagUpdates.has(tag)) tagUpdates.set(tag, []);
@@ -311,6 +402,8 @@ summary.push(`Já existem no banco: ${alreadyThere.length}`);
 summary.push(`NOVOS a gravar: ${newRecords.length}`);
 summary.push(`Etiquetas a acrescentar em carrinhos existentes: ${[...tagUpdates.values()].reduce((a, ids) => a + ids.length, 0)}`);
 summary.push(`Carrinhos no banco: ${existingRows.length} | sem confirmação na Wiki: ${orphans.length}`);
+summary.push(`Já existem, mas a Wiki diz outro ano: ${yearMismatch.length}`);
+summary.push(`Treasure Hunts ambíguos (sem etiqueta, decisão manual): ${ambiguousTh.length}`);
 
 const report = [...summary];
 
@@ -326,6 +419,22 @@ for (const [line, s] of [...lineStats.entries()].sort((a, b) => b[1].created - a
 
 report.push('\n=== ETIQUETAS (carrinhos distintos) ===');
 for (const [tag, count] of tagCounts) report.push(`${tag}: ${count}`);
+
+report.push('\n=== ETIQUETAS A ACRESCENTAR EM CARRINHOS EXISTENTES (até 20) ===');
+const existingById = new Map(existingRows.map((r) => [r.id, r]));
+for (const [tag, ids] of tagUpdates) {
+  for (const id of ids.slice(0, 20)) {
+    const r = existingById.get(id);
+    report.push(`${tag} | ${r.year ?? '-'} | ${r.code} | ${r.name} | ${r.line ?? '-'}`);
+  }
+}
+
+report.push('\n=== JÁ EXISTEM, MAS A WIKI DIZ OUTRO ANO (até 30) ===');
+report.push('linha | código | nome | ano no banco | ano na Wiki | página');
+yearMismatch.forEach((m) => report.push(m));
+
+report.push('\n=== TREASURE HUNTS AMBÍGUOS (mesmo código para carrinhos diferentes) ===');
+ambiguousTh.forEach((a) => report.push(a));
 
 report.push('\n=== NO BANCO, SEM CONFIRMAÇÃO NA WIKI (até 15) ===');
 for (const row of orphans.slice(0, 15)) report.push(`${row.line ?? '-'} | ${row.code} | ${row.name}`);
@@ -381,7 +490,7 @@ console.log('\nRelatório completo salvo em backend\\import-report.txt');
 // 7. Gravar (só com --save)
 if (SAVE) {
   if (newRecords.length > 0) {
-    const toSave = newRecords.map(({ _page, _subset, ...data }) => data);
+    const toSave = newRecords.map(({ _page, _subset, _thKind, ...data }) => data);
     for (let i = 0; i < toSave.length; i += 500) {
       await prisma.hotWheel.createMany({ data: toSave.slice(i, i + 500) });
       console.log(`  gravados ${Math.min(i + 500, toSave.length)}/${toSave.length}`);
