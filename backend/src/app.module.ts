@@ -7,9 +7,10 @@ import { AuthModule } from './auth/auth.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { GarageModule } from './garage/garage.module';
 import { SubscriptionModule } from './subscription/subscription.module';
+import { AnalysisModule } from './analysis/analysis.module';
 
 @Module({
-  imports: [AuthModule, CatalogModule, GarageModule, SubscriptionModule],
+  imports: [AuthModule, CatalogModule, GarageModule, SubscriptionModule, AnalysisModule],
   controllers: [AppController, HealthController],
   providers: [AppService, PrismaService],
 })

@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateHotWheelDto } from './dto/create-hotwheel.dto';
 import { normalizeCode } from './utils/normalize-code.util';
@@ -47,6 +47,12 @@ export class CatalogService {
       take: 100,
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async findOne(id: string) {
+    const hotWheel = await this.prisma.hotWheel.findUnique({ where: { id } });
+    if (!hotWheel) throw new NotFoundException('Hot Wheels não encontrado no catálogo.');
+    return hotWheel;
   }
 
   async findByCode(code: string) {

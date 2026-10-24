@@ -33,6 +33,7 @@ model User {
   updatedAt     DateTime       @updatedAt
   garageItems   GarageItem[]
   subscriptions Subscription[]
+  aiAnalyses    AiAnalysis[]
 }
 
 model HotWheel {
@@ -61,6 +62,7 @@ model HotWheel {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   garageItems       GarageItem[]
+  aiAnalyses        AiAnalysis[]
 
   @@index([code])
   @@index([line, year])
@@ -79,6 +81,29 @@ model GarageItem {
   hotWheel HotWheel @relation(fields: [hotWheelId], references: [id], onDelete: Cascade)
 
   @@unique([userId, hotWheelId])
+}
+
+// Análise do Colecionador (premium): cada clique em "Analisar" gera um registro.
+// Guarda o resultado para mostrar a última análise sem custo e o consumo para acompanhar o gasto.
+model AiAnalysis {
+  id           String   @id @default(uuid())
+  userId       String
+  hotWheelId   String
+  status       String // "ok" | "error"
+  model        String
+  result       Json?
+  sources      Json?
+  searches     Int      @default(0)
+  inputTokens  Int?
+  outputTokens Int?
+  error        String?
+  createdAt    DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotWheel HotWheel @relation(fields: [hotWheelId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, hotWheelId, createdAt])
 }
 
 model SubscriptionPlan {

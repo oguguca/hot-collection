@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { CatalogService } from './catalog.service';
 import { CreateHotWheelDto } from './dto/create-hotwheel.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -23,5 +23,10 @@ export class CatalogController {
   @Get('code/:code')
   findByCode(@Param('code') code: string) {
     return this.catalogService.findByCode(code);
+  }
+
+  @Get(':id')
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.catalogService.findOne(id);
   }
 }

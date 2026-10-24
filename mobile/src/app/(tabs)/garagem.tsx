@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 import { colors, typography, spacing } from '@/theme';
 import { api } from '@/services/api';
@@ -85,11 +85,16 @@ export default function GaragemScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <HotWheelCard
-            hotWheel={item.hotWheel}
-            favorite={item.favorite}
-            quantity={item.quantity}
-          />
+          // Tocar no carrinho abre a Análise do Colecionador
+          <Pressable
+            onPress={() => router.push({ pathname: '/analise/[id]', params: { id: item.hotWheel.id } })}
+            style={({ pressed }) => pressed && styles.pressed}>
+            <HotWheelCard
+              hotWheel={item.hotWheel}
+              favorite={item.favorite}
+              quantity={item.quantity}
+            />
+          </Pressable>
         )}
       />
     </SafeAreaView>
@@ -103,6 +108,7 @@ const styles = StyleSheet.create({
   header: { marginBottom: spacing.md },
   title: { ...typography.h2, color: colors.text.primary },
   subtitle: { ...typography.body, color: colors.text.secondary },
+  pressed: { opacity: 0.7 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xl },
   emptyText: {
     ...typography.body,
