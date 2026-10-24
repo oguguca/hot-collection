@@ -71,3 +71,5 @@ wikitext-*.txt
 import-report.txt
 survey-report.txt
 wikitext-*.txt
+
+backups/
